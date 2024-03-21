@@ -854,8 +854,10 @@ func connectToDatabase(app *App) {
 		}
 		db, err = sql.Open("sqlite3_with_regex", app.cfg.Database.FileName+"?parseTime=true&cached=shared")
 		db.SetMaxOpenConns(2)
+	} else if app.cfg.Database.Type == driverPostGreSQL {
+		db, err = sql.Open(app.cfg.Database.Type, fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", app.cfg.Database.User, app.cfg.Database.Password, app.cfg.Database.Host, app.cfg.Database.Port, app.cfg.Database.Database)
 	} else {
-		log.Error("Invalid database type '%s'. Only 'mysql' and 'sqlite3' are supported right now.", app.cfg.Database.Type)
+		log.Error("Invalid database type '%s'. Only 'mysql', 'postgres' and 'sqlite3' are supported right now.", app.cfg.Database.Type)
 		os.Exit(1)
 	}
 	if err != nil {

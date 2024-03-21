@@ -228,6 +228,15 @@ func (cfg *Config) UseSQLite(fresh bool) {
 	}
 }
 
+// UsePostGreSQL resets the Config's Database to use default values for a PostGreSQL setup.
+func (cfg *Config) UsePostgreSQL(fresh bool) {
+	cfg.Database.Type = "postgres"
+	if fresh {
+		cfg.Database.Host = "localhost"
+		cfg.Database.Port = 5432
+	}
+}
+
 // IsSecureStandalone returns whether or not the application is running as a
 // standalone server with TLS enabled.
 func (cfg *Config) IsSecureStandalone() bool {

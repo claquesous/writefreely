@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/lib/pq"
 	"github.com/writeas/web-core/silobridge"
 	wf_db "github.com/writefreely/writefreely/db"
 	"github.com/writefreely/writefreely/parse"
@@ -48,6 +49,7 @@ const (
 
 	driverMySQL  = "mysql"
 	driverSQLite = "sqlite3"
+	driverPostGreSQL = "postgres"
 )
 
 var (
