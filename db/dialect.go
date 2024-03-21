@@ -7,6 +7,7 @@ type DialectType int
 const (
 	DialectSQLite DialectType = iota
 	DialectMySQL  DialectType = iota
+  DialectPostGreSQL DialectType = iota
 )
 
 func (d DialectType) Column(name string, t ColumnType, size OptionalInt) *Column {
