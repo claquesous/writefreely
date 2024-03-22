@@ -855,7 +855,7 @@ func connectToDatabase(app *App) {
 		db, err = sql.Open("sqlite3_with_regex", app.cfg.Database.FileName+"?parseTime=true&cached=shared")
 		db.SetMaxOpenConns(2)
 	} else if app.cfg.Database.Type == driverPostGreSQL {
-		db, err = sql.Open(app.cfg.Database.Type, fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", app.cfg.Database.User, app.cfg.Database.Password, app.cfg.Database.Host, app.cfg.Database.Port, app.cfg.Database.Database)
+		db, err = sql.Open(app.cfg.Database.Type, fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", app.cfg.Database.User, app.cfg.Database.Password, app.cfg.Database.Host, app.cfg.Database.Port, app.cfg.Database.Database))
 	} else {
 		log.Error("Invalid database type '%s'. Only 'mysql', 'postgres' and 'sqlite3' are supported right now.", app.cfg.Database.Type)
 		os.Exit(1)
@@ -948,15 +948,20 @@ var schemaSql string
 //go:embed sqlite.sql
 var sqliteSql string
 
+//go:embed pgschema.sql
+var pgSchemaSql string
+
 func adminInitDatabase(app *App) error {
 	var schema string
 	if app.cfg.Database.Type == driverSQLite {
 		schema = sqliteSql
-	} else {
+	} else if app.cfg.Database.Type == driverMySQL {
 		schema = schemaSql
-	}
+	} else {
+    schema = pgSchemaSql
+  }
 
-	tblReg := regexp.MustCompile("CREATE TABLE (IF NOT EXISTS )?`([a-z_]+)`")
+	tblReg := regexp.MustCompile("CREATE TABLE (IF NOT EXISTS )?`?([a-z_]+)`?")
 
 	queries := strings.Split(string(schema), ";\n")
 	for _, q := range queries {

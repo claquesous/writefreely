@@ -229,7 +229,7 @@ func (cfg *Config) UseSQLite(fresh bool) {
 }
 
 // UsePostGreSQL resets the Config's Database to use default values for a PostGreSQL setup.
-func (cfg *Config) UsePostgreSQL(fresh bool) {
+func (cfg *Config) UsePostGreSQL(fresh bool) {
 	cfg.Database.Type = "postgres"
 	if fresh {
 		cfg.Database.Host = "localhost"

@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/lib/pq"
+	_ "github.com/lib/pq"
 	"github.com/writeas/web-core/silobridge"
 	wf_db "github.com/writefreely/writefreely/db"
 	"github.com/writefreely/writefreely/parse"
@@ -2976,9 +2976,11 @@ func (db *datastore) DatabaseInitialized() bool {
 	var err error
 	if db.driverName == driverSQLite {
 		err = db.QueryRow("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'users'").Scan(&dummy)
-	} else {
+	} else if db.driverName == driverMySQL {
 		err = db.QueryRow("SHOW TABLES LIKE 'users'").Scan(&dummy)
-	}
+	} else {
+    err = db.QueryRow("SELECT * from pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema'").Scan(&dummy)
+  }
 	switch {
 	case err == sql.ErrNoRows:
 		return false

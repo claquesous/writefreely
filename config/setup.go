@@ -160,16 +160,21 @@ func Configure(fname string, configSections string) (*SetupData, error) {
 		selPrompt = promptui.Select{
 			Templates: selTmpls,
 			Label:     "Database driver",
-			Items:     []string{"MySQL", "SQLite"},
+			Items:     []string{"MySQL", "PostGreSQL", "SQLite"},
 		}
 		sel, _, err := selPrompt.Run()
 		if err != nil {
 			return data, err
 		}
 
-		if sel == 0 {
-			// Configure for MySQL
-			data.Config.UseMySQL(isNewCfg)
+		if sel == 0 || sel == 1 {
+      if sel == 0 {
+			  // Configure for MySQL
+			  data.Config.UseMySQL(isNewCfg)
+      } else {
+        // Configure for PostGreSQL
+        data.Config.UsePostGreSQL(isNewCfg)
+      }
 
 			prompt = promptui.Prompt{
 				Templates: tmpls,
@@ -227,7 +232,7 @@ func Configure(fname string, configSections string) (*SetupData, error) {
 				return data, err
 			}
 			data.Config.Database.Port, _ = strconv.Atoi(dbPort) // Ignore error, as we've already validated number
-		} else if sel == 1 {
+		} else if sel == 2 {
 			// Configure for SQLite
 			data.Config.UseSQLite(isNewCfg)
 
@@ -241,7 +246,7 @@ func Configure(fname string, configSections string) (*SetupData, error) {
 			if err != nil {
 				return data, err
 			}
-		}
+    }
 
 		fmt.Println()
 	}
