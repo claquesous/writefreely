@@ -76,7 +76,10 @@ func (db *datastore) typeBool() string {
 }
 
 func (db *datastore) typeDateTime() string {
-	return "DATETIME"
+	if db.driverName == driverPostGreSQL {
+    return "TIMESTAMP(0)"
+  }
+  return "DATETIME"
 }
 
 func (db *datastore) typeIntPrimaryKey() string {
@@ -96,7 +99,7 @@ func (db *datastore) collateMultiByte() string {
 }
 
 func (db *datastore) engine() string {
-	if db.driverName == driverSQLite {
+	if db.driverName == driverSQLite || db.driverName == driverPostGreSQL {
 		return ""
 	}
 	return " ENGINE = InnoDB"

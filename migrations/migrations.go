@@ -31,6 +31,7 @@ func NewDatastore(db *sql.DB, dn string) *datastore {
 const (
 	driverMySQL  = "mysql"
 	driverSQLite = "sqlite3"
+  driverPostGreSQL = "postgres"
 )
 
 type Migration interface {
@@ -79,8 +80,13 @@ func CurrentVer() int {
 }
 
 func SetInitialMigrations(db *datastore) error {
+  var err error
 	// Included schema files represent changes up to V1, so note that in the database
-	_, err := db.Exec("INSERT INTO appmigrations (version, migrated, result) VALUES (?, "+db.now()+", ?)", 1, "")
+  if db.driverName == driverPostGreSQL {
+  	_, err = db.Exec("INSERT INTO appmigrations (version, migrated, result) VALUES (1, now(), '')")
+  } else {
+  	_, err = db.Exec("INSERT INTO appmigrations (version, migrated, result) VALUES (?, "+db.now()+", ?)", 1, "")
+  }
 	if err != nil {
 		return err
 	}
@@ -96,7 +102,7 @@ func Migrate(db *datastore) error {
 			return err
 		}
 	} else {
-		log.Info("Initializing appmigrations table...")
+		log.Info("Initializing appmigrations table...2")
 		version = 0
 		_, err = db.Exec(`CREATE TABLE appmigrations (
 			version ` + db.typeInt() + ` NOT NULL,
@@ -135,7 +141,9 @@ func (db *datastore) tableExists(t string) bool {
 	var err error
 	if db.driverName == driverSQLite {
 		err = db.QueryRow("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", t).Scan(&dummy)
-	} else {
+	} else if db.driverName == driverPostGreSQL {
+    err = db.QueryRow("SELECT tablename from pg_catalog.pg_tables WHERE tablename = '$2'", t).Scan(&dummy)
+  } else {
 		err = db.QueryRow("SHOW TABLES LIKE '" + t + "'").Scan(&dummy)
 	}
 	switch {

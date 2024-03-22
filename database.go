@@ -206,7 +206,7 @@ func (db *datastore) CreateUser(cfg *config.Config, u *User, collectionTitle str
 
 	// 1. Add to `users` table
 	// NOTE: Assumes User's Password is already hashed!
-	res, err := t.Exec("INSERT INTO users (username, password, email) VALUES (?, ?, ?)", u.Username, u.HashedPass, u.Email)
+	_, err = t.Exec(`INSERT INTO users (username, password, email) VALUES ($1, $2, $3)`, u.Username, u.HashedPass, u.Email)
 	if err != nil {
 		t.Rollback()
 		if db.isDuplicateKeyErr(err) {
@@ -216,18 +216,19 @@ func (db *datastore) CreateUser(cfg *config.Config, u *User, collectionTitle str
 		log.Error("Rolling back users INSERT: %v\n", err)
 		return err
 	}
-	u.ID, err = res.LastInsertId()
-	if err != nil {
-		t.Rollback()
-		log.Error("Rolling back after LastInsertId: %v\n", err)
-		return err
-	}
+  //u.ID, err = res.LastInsertId()
+//  if err != nil {
+  //  t.Rollback()
+    //log.Error("Rolling back after LastInsertId: %v\n", err)
+   // return err
+ // }
+
 
 	// 2. Create user's Collection
 	if collectionTitle == "" {
 		collectionTitle = u.Username
 	}
-	res, err = t.Exec("INSERT INTO collections (alias, title, description, privacy, owner_id, view_count) VALUES (?, ?, ?, ?, ?, ?)", u.Username, collectionTitle, collectionDesc, defaultVisibility(cfg), u.ID, 0)
+	_, err = t.Exec(`INSERT INTO collections (alias, title, description, privacy, owner_id, view_count) VALUES ($1, $2, $3, $4, $5, $6)`, u.Username, collectionTitle, collectionDesc, defaultVisibility(cfg), u.ID, 0)
 	if err != nil {
 		t.Rollback()
 		if db.isDuplicateKeyErr(err) {
@@ -841,7 +842,8 @@ func (db *datastore) GetCollectionBy(condition string, value interface{}) (*Coll
 
 	// FIXME: change Collection to reflect database values. Add helper functions to get actual values
 	var styleSheet, script, signature, format zero.String
-	row := db.QueryRow("SELECT id, alias, title, description, style_sheet, script, post_signature, format, owner_id, privacy, view_count FROM collections WHERE "+condition, value)
+  log.Info(condition)
+	row := db.QueryRow("SELECT id, alias, title, description, style_sheet, script, format, owner_id, privacy, view_count FROM collections WHERE "+condition, value)
 
 	err := row.Scan(&c.ID, &c.Alias, &c.Title, &c.Description, &styleSheet, &script, &signature, &format, &c.OwnerID, &c.Visibility, &c.Views)
 	switch {
@@ -889,7 +891,7 @@ func (db *datastore) GetCollectionForPad(alias string) (*Collection, error) {
 }
 
 func (db *datastore) GetCollectionByID(id int64) (*Collection, error) {
-	return db.GetCollectionBy("id = ?", id)
+	return db.GetCollectionBy(`id = $1`, id)
 }
 
 func (db *datastore) GetCollectionFromDomain(host string) (*Collection, error) {
@@ -2343,7 +2345,7 @@ func (db *datastore) ChangePassphrase(userID int64, sudo bool, curPass string, h
 }
 
 func (db *datastore) RemoveCollectionRedirect(t *sql.Tx, alias string) error {
-	_, err := t.Exec("DELETE FROM collectionredirects WHERE prev_alias = ?", alias)
+	_, err := t.Exec(`DELETE FROM collectionredirects WHERE prev_alias = $1`, alias)
 	if err != nil {
 		log.Error("Unable to delete from collectionredirects: %v", err)
 		return err
@@ -2979,7 +2981,7 @@ func (db *datastore) DatabaseInitialized() bool {
 	} else if db.driverName == driverMySQL {
 		err = db.QueryRow("SHOW TABLES LIKE 'users'").Scan(&dummy)
 	} else {
-    err = db.QueryRow("SELECT * from pg_catalog.pg_tables WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema'").Scan(&dummy)
+    err = db.QueryRow("SELECT tablename from pg_catalog.pg_tables WHERE tablename = 'users'").Scan(&dummy)
   }
 	switch {
 	case err == sql.ErrNoRows:

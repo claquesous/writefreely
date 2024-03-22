@@ -23,7 +23,9 @@ func (db *datastore) isDuplicateKeyErr(err error) bool {
 		if mysqlErr, ok := err.(*mysql.MySQLError); ok {
 			return mysqlErr.Number == mySQLErrDuplicateKey
 		}
-	} else {
+	} else if db.driverName == driverPostGreSQL {
+
+  } else {
 		log.Error("isDuplicateKeyErr: failed check for unrecognized driver '%s'", db.driverName)
 	}
 
