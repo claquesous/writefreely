@@ -16,6 +16,8 @@ func (d DialectType) Column(name string, t ColumnType, size OptionalInt) *Column
 		return &Column{Dialect: DialectSQLite, Name: name, Type: t, Size: size}
 	case DialectMySQL:
 		return &Column{Dialect: DialectMySQL, Name: name, Type: t, Size: size}
+	case DialectPostGreSQL:
+		return &Column{Dialect: DialectPostGreSQL, Name: name, Type: t, Size: size}
 	default:
 		panic(fmt.Sprintf("unexpected dialect: %d", d))
 	}
@@ -27,6 +29,8 @@ func (d DialectType) Table(name string) *CreateTableSqlBuilder {
 		return &CreateTableSqlBuilder{Dialect: DialectSQLite, Name: name}
 	case DialectMySQL:
 		return &CreateTableSqlBuilder{Dialect: DialectMySQL, Name: name}
+	case DialectPostGreSQL:
+		return &CreateTableSqlBuilder{Dialect: DialectPostGreSQL, Name: name}
 	default:
 		panic(fmt.Sprintf("unexpected dialect: %d", d))
 	}
@@ -38,6 +42,8 @@ func (d DialectType) AlterTable(name string) *AlterTableSqlBuilder {
 		return &AlterTableSqlBuilder{Dialect: DialectSQLite, Name: name}
 	case DialectMySQL:
 		return &AlterTableSqlBuilder{Dialect: DialectMySQL, Name: name}
+	case DialectPostGreSQL:
+		return &AlterTableSqlBuilder{Dialect: DialectPostGreSQL, Name: name}
 	default:
 		panic(fmt.Sprintf("unexpected dialect: %d", d))
 	}
@@ -49,6 +55,8 @@ func (d DialectType) CreateUniqueIndex(name, table string, columns ...string) *C
 		return &CreateIndexSqlBuilder{Dialect: DialectSQLite, Name: name, Table: table, Unique: true, Columns: columns}
 	case DialectMySQL:
 		return &CreateIndexSqlBuilder{Dialect: DialectMySQL, Name: name, Table: table, Unique: true, Columns: columns}
+	case DialectPostGreSQL:
+		return &CreateIndexSqlBuilder{Dialect: DialectPostGreSQL, Name: name, Table: table, Unique: true, Columns: columns}
 	default:
 		panic(fmt.Sprintf("unexpected dialect: %d", d))
 	}
@@ -60,6 +68,8 @@ func (d DialectType) CreateIndex(name, table string, columns ...string) *CreateI
 		return &CreateIndexSqlBuilder{Dialect: DialectSQLite, Name: name, Table: table, Unique: false, Columns: columns}
 	case DialectMySQL:
 		return &CreateIndexSqlBuilder{Dialect: DialectMySQL, Name: name, Table: table, Unique: false, Columns: columns}
+	case DialectPostGreSQL:
+		return &CreateIndexSqlBuilder{Dialect: DialectPostGreSQL, Name: name, Table: table, Unique: false, Columns: columns}
 	default:
 		panic(fmt.Sprintf("unexpected dialect: %d", d))
 	}
@@ -71,6 +81,8 @@ func (d DialectType) DropIndex(name, table string) *DropIndexSqlBuilder {
 		return &DropIndexSqlBuilder{Dialect: DialectSQLite, Name: name, Table: table}
 	case DialectMySQL:
 		return &DropIndexSqlBuilder{Dialect: DialectMySQL, Name: name, Table: table}
+	case DialectPostGreSQL:
+		return &DropIndexSqlBuilder{Dialect: DialectPostGreSQL, Name: name, Table: table}
 	default:
 		panic(fmt.Sprintf("unexpected dialect: %d", d))
 	}

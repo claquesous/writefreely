@@ -21,6 +21,8 @@ func oauthAttach(db *datastore) error {
 	dialect := wf_db.DialectMySQL
 	if db.driverName == driverSQLite {
 		dialect = wf_db.DialectSQLite
+	} else if db.driverName == driverPostGreSQL {
+		dialect = wf_db.DialectPostGreSQL
 	}
 	return wf_db.RunTransactionWithOptions(context.Background(), db.DB, &sql.TxOptions{}, func(ctx context.Context, tx *sql.Tx) error {
 		builders := []wf_db.SQLBuilder{

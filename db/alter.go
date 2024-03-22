@@ -20,7 +20,11 @@ func (b *AlterTableSqlBuilder) AddColumn(col *Column) *AlterTableSqlBuilder {
 
 func (b *AlterTableSqlBuilder) ChangeColumn(name string, col *Column) *AlterTableSqlBuilder {
 	if colVal, err := col.String(); err == nil {
-		b.Changes = append(b.Changes, fmt.Sprintf("CHANGE COLUMN %s %s", name, colVal))
+    if b.Dialect == DialectPostGreSQL {
+      b.Changes = append(b.Changes, fmt.Sprintf("ALTER %s TYPE %s", name, colVal))
+    } else {
+		  b.Changes = append(b.Changes, fmt.Sprintf("CHANGE COLUMN %s %s", name, colVal))
+    }
 	}
 	return b
 }

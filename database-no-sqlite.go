@@ -37,6 +37,8 @@ func (db *datastore) isIgnorableError(err error) bool {
 		if mysqlErr, ok := err.(*mysql.MySQLError); ok {
 			return mysqlErr.Number == mySQLErrCollationMix
 		}
+	} else if db.driverName == driverPostGreSQL {
+
 	} else {
 		log.Error("isIgnorableError: failed check for unrecognized driver '%s'", db.driverName)
 	}

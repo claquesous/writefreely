@@ -327,7 +327,7 @@ func (db *datastore) CreateCollection(cfg *config.Config, alias, title string, u
 func (db *datastore) GetUserByID(id int64) (*User, error) {
 	u := &User{ID: id}
 
-	err := db.QueryRow("SELECT username, password, email, created, status FROM users WHERE id = ?", id).Scan(&u.Username, &u.HashedPass, &u.Email, &u.Created, &u.Status)
+	err := db.QueryRow(`SELECT username, password, email, created, status FROM users WHERE id = $1`, id).Scan(&u.Username, &u.HashedPass, &u.Email, &u.Created, &u.Status)
 	switch {
 	case err == sql.ErrNoRows:
 		return nil, ErrUserNotFound
@@ -344,7 +344,8 @@ func (db *datastore) GetUserByID(id int64) (*User, error) {
 func (db *datastore) IsUserSilenced(id int64) (bool, error) {
 	u := &User{ID: id}
 
-	err := db.QueryRow("SELECT status FROM users WHERE id = ?", id).Scan(&u.Status)
+	err := db.QueryRow(`SELECT status FROM users WHERE id = $1`, id).Scan(&u.Status)
+  log.Info("isUserSilenced %d", id)
 	switch {
 	case err == sql.ErrNoRows:
 		return false, ErrUserNotFound
@@ -364,7 +365,7 @@ func (db *datastore) DoesUserNeedAuth(id int64) bool {
 	var pass, email []byte
 
 	// Find out if user has an email set first
-	err := db.QueryRow("SELECT password, email FROM users WHERE id = ?", id).Scan(&pass, &email)
+	err := db.QueryRow(`SELECT password, email FROM users WHERE id = $1`, id).Scan(&pass, &email)
 	switch {
 	case err == sql.ErrNoRows:
 		// ERROR. Don't give false positives on needing auth methods
@@ -842,8 +843,7 @@ func (db *datastore) GetCollectionBy(condition string, value interface{}) (*Coll
 
 	// FIXME: change Collection to reflect database values. Add helper functions to get actual values
 	var styleSheet, script, signature, format zero.String
-  log.Info(condition)
-	row := db.QueryRow("SELECT id, alias, title, description, style_sheet, script, format, owner_id, privacy, view_count FROM collections WHERE "+condition, value)
+	row := db.QueryRow("SELECT id, alias, title, description, style_sheet, script, post_signature, format, owner_id, privacy, view_count FROM collections WHERE "+condition, value)
 
 	err := row.Scan(&c.ID, &c.Alias, &c.Title, &c.Description, &styleSheet, &script, &signature, &format, &c.OwnerID, &c.Visibility, &c.Views)
 	switch {
@@ -2354,7 +2354,7 @@ func (db *datastore) RemoveCollectionRedirect(t *sql.Tx, alias string) error {
 }
 
 func (db *datastore) GetCollectionRedirect(alias string) (new string) {
-	row := db.QueryRow("SELECT new_alias FROM collectionredirects WHERE prev_alias = ?", alias)
+	row := db.QueryRow(`SELECT new_alias FROM collectionredirects WHERE prev_alias = $1`, alias)
 	err := row.Scan(&new)
 	if err != nil && err != sql.ErrNoRows && !db.isIgnorableError(err) {
 		log.Error("Failed selecting from collectionredirects: %v", err)
@@ -2457,7 +2457,12 @@ func (db *datastore) CollectionHasAttribute(id int64, attr string) bool {
 
 func (db *datastore) GetCollectionAttribute(id int64, attr string) string {
 	var v string
-	err := db.QueryRow("SELECT value FROM collectionattributes WHERE collection_id = ? AND attribute = ?", id, attr).Scan(&v)
+  var err error
+  if db.driverName == driverPostGreSQL {
+	  err = db.QueryRow(`SELECT value FROM collectionattributes WHERE collection_id = $1 AND attribute = $2`, id, attr).Scan(&v)
+  } else {
+	  err = db.QueryRow("SELECT value FROM collectionattributes WHERE collection_id = ? AND attribute = ?", id, attr).Scan(&v)
+  }
 	switch {
 	case err == sql.ErrNoRows:
 		return ""
@@ -2981,7 +2986,7 @@ func (db *datastore) DatabaseInitialized() bool {
 	} else if db.driverName == driverMySQL {
 		err = db.QueryRow("SHOW TABLES LIKE 'users'").Scan(&dummy)
 	} else {
-    err = db.QueryRow("SELECT tablename from pg_catalog.pg_tables WHERE tablename = 'users'").Scan(&dummy)
+    err = db.QueryRow("SELECT tablename from pg_catalog.pg_tables WHERE tablename = 'user'").Scan(&dummy)
   }
 	switch {
 	case err == sql.ErrNoRows:

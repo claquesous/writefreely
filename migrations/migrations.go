@@ -124,7 +124,7 @@ func Migrate(db *datastore) error {
 			}
 
 			// Update migrations table
-			_, err = db.Exec("INSERT INTO appmigrations (version, migrated, result) VALUES (?, "+db.now()+", ?)", curVer, "")
+			_, err = db.Exec(`INSERT INTO appmigrations (version, migrated, result) VALUES ($1, `+db.now()+`, $2)`, curVer, "")
 			if err != nil {
 				return err
 			}
@@ -142,7 +142,7 @@ func (db *datastore) tableExists(t string) bool {
 	if db.driverName == driverSQLite {
 		err = db.QueryRow("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", t).Scan(&dummy)
 	} else if db.driverName == driverPostGreSQL {
-    err = db.QueryRow("SELECT tablename from pg_catalog.pg_tables WHERE tablename = '$2'", t).Scan(&dummy)
+    err = db.QueryRow(`SELECT tablename from pg_catalog.pg_tables WHERE tablename = $1`, t).Scan(&dummy)
   } else {
 		err = db.QueryRow("SHOW TABLES LIKE '" + t + "'").Scan(&dummy)
 	}

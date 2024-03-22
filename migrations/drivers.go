@@ -39,6 +39,8 @@ func (db *datastore) typeSmallInt() string {
 func (db *datastore) typeTinyInt() string {
 	if db.driverName == driverSQLite {
 		return "INTEGER"
+	} else if db.driverName == driverPostGreSQL {
+    return "SMALLINT"
 	}
 	return "TINYINT"
 }
@@ -64,14 +66,18 @@ func (db *datastore) typeVarChar(l int) string {
 func (db *datastore) typeVarBinary(l int) string {
 	if db.driverName == driverSQLite {
 		return "BLOB"
-	}
+	} else if db.driverName == driverPostGreSQL {
+    return "typea"
+  }
 	return fmt.Sprintf("VARBINARY(%d)", l)
 }
 
 func (db *datastore) typeBool() string {
 	if db.driverName == driverSQLite {
 		return "INTEGER"
-	}
+	} else if db.driverName == driverPostGreSQL {
+    return "SMALLINT"
+  }
 	return "TINYINT(1)"
 }
 
@@ -87,12 +93,14 @@ func (db *datastore) typeIntPrimaryKey() string {
 		// From docs: "In SQLite, a column with type INTEGER PRIMARY KEY is an alias for the ROWID (except in WITHOUT
 		// ROWID tables) which is always a 64-bit signed integer."
 		return "INTEGER PRIMARY KEY"
-	}
+	} else if db.driverName == driverPostGreSQL {
+    return "SERIAL PRIMARY KEY"
+  }
 	return "INT AUTO_INCREMENT PRIMARY KEY"
 }
 
 func (db *datastore) collateMultiByte() string {
-	if db.driverName == driverSQLite {
+	if db.driverName == driverSQLite || db.driverName == driverPostGreSQL {
 		return ""
 	}
 	return " COLLATE utf8_bin"
@@ -106,7 +114,7 @@ func (db *datastore) engine() string {
 }
 
 func (db *datastore) after(colName string) string {
-	if db.driverName == driverSQLite {
+	if db.driverName == driverSQLite || db.driverName == driverPostGreSQL {
 		return ""
 	}
 	return " AFTER " + colName
