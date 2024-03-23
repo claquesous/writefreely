@@ -222,6 +222,7 @@ func (db *datastore) CreateUser(cfg *config.Config, u *User, collectionTitle str
     //log.Error("Rolling back after LastInsertId: %v\n", err)
    // return err
  // }
+  u.ID = 1
 
 
 	// 2. Create user's Collection
@@ -281,7 +282,7 @@ func (db *datastore) CreateCollectionFromToken(cfg *config.Config, alias, title,
 
 func (db *datastore) GetUserCollectionCount(userID int64) (uint64, error) {
 	var collCount uint64
-	err := db.QueryRow("SELECT COUNT(*) FROM collections WHERE owner_id = ?", userID).Scan(&collCount)
+	err := db.QueryRow(`SELECT COUNT(*) FROM collections WHERE owner_id = $1`, userID).Scan(&collCount)
 	switch {
 	case err == sql.ErrNoRows:
 		return 0, impart.HTTPError{http.StatusInternalServerError, "Couldn't retrieve user from database."}
@@ -345,7 +346,6 @@ func (db *datastore) IsUserSilenced(id int64) (bool, error) {
 	u := &User{ID: id}
 
 	err := db.QueryRow(`SELECT status FROM users WHERE id = $1`, id).Scan(&u.Status)
-  log.Info("isUserSilenced %d", id)
 	switch {
 	case err == sql.ErrNoRows:
 		return false, ErrUserNotFound
@@ -381,7 +381,7 @@ func (db *datastore) DoesUserNeedAuth(id int64) bool {
 
 func (db *datastore) IsUserPassSet(id int64) (bool, error) {
 	var pass []byte
-	err := db.QueryRow("SELECT password FROM users WHERE id = ?", id).Scan(&pass)
+	err := db.QueryRow(`SELECT password FROM users WHERE id = $1`, id).Scan(&pass)
 	switch {
 	case err == sql.ErrNoRows:
 		return false, nil
@@ -396,13 +396,13 @@ func (db *datastore) IsUserPassSet(id int64) (bool, error) {
 func (db *datastore) GetUserForAuth(username string) (*User, error) {
 	u := &User{Username: username}
 
-	err := db.QueryRow("SELECT id, password, email, created, status FROM users WHERE username = ?", username).Scan(&u.ID, &u.HashedPass, &u.Email, &u.Created, &u.Status)
+	err := db.QueryRow(`SELECT id, password, email, created, status FROM users WHERE username = $1`, username).Scan(&u.ID, &u.HashedPass, &u.Email, &u.Created, &u.Status)
 	switch {
 	case err == sql.ErrNoRows:
 		// Check if they've entered the wrong, unnormalized username
 		username = getSlug(username, "")
 		if username != u.Username {
-			err = db.QueryRow("SELECT id FROM users WHERE username = ? LIMIT 1", username).Scan(&u.ID)
+			err = db.QueryRow(`SELECT id FROM users WHERE username = $1 LIMIT 1`, username).Scan(&u.ID)
 			if err == nil {
 				return db.GetUserForAuth(username)
 			}
@@ -419,7 +419,7 @@ func (db *datastore) GetUserForAuth(username string) (*User, error) {
 func (db *datastore) GetUserForAuthByID(userID int64) (*User, error) {
 	u := &User{ID: userID}
 
-	err := db.QueryRow("SELECT id, password, email, created, status FROM users WHERE id = ?", u.ID).Scan(&u.ID, &u.HashedPass, &u.Email, &u.Created, &u.Status)
+	err := db.QueryRow(`SELECT id, password, email, created, status FROM users WHERE id = $1`, u.ID).Scan(&u.ID, &u.HashedPass, &u.Email, &u.Created, &u.Status)
 	switch {
 	case err == sql.ErrNoRows:
 		return nil, ErrUserNotFound
@@ -439,7 +439,7 @@ func (db *datastore) GetUserNameFromToken(accessToken string) (string, error) {
 
 	var oneTime bool
 	var username string
-	err := db.QueryRow("SELECT username, one_time FROM accesstokens LEFT JOIN users ON user_id = id WHERE token LIKE ? AND (expires IS NULL OR expires > "+db.now()+")", t).Scan(&username, &oneTime)
+	err := db.QueryRow(`SELECT username, one_time FROM accesstokens LEFT JOIN users ON user_id = id WHERE token LIKE $1 AND (expires IS NULL OR expires > `+db.now()+`)`, t).Scan(&username, &oneTime)
 	switch {
 	case err == sql.ErrNoRows:
 		return "", ErrBadAccessToken
@@ -464,7 +464,7 @@ func (db *datastore) GetUserDataFromToken(accessToken string) (int64, string, er
 	var userID int64
 	var oneTime bool
 	var username string
-	err := db.QueryRow("SELECT user_id, username, one_time FROM accesstokens LEFT JOIN users ON user_id = id WHERE token LIKE ? AND (expires IS NULL OR expires > "+db.now()+")", t).Scan(&userID, &username, &oneTime)
+	err := db.QueryRow(`SELECT user_id, username, one_time FROM accesstokens LEFT JOIN users ON user_id = id WHERE token LIKE $1 AND (expires IS NULL OR expires > `+db.now()+`)`, t).Scan(&userID, &username, &oneTime)
 	switch {
 	case err == sql.ErrNoRows:
 		return 0, "", ErrBadAccessToken
@@ -503,7 +503,7 @@ func (db *datastore) GetUserIDPrivilege(accessToken string) (userID int64, sudo 
 	}
 
 	var oneTime bool
-	err := db.QueryRow("SELECT user_id, sudo, one_time FROM accesstokens WHERE token LIKE ? AND (expires IS NULL OR expires > "+db.now()+")", t).Scan(&userID, &sudo, &oneTime)
+	err := db.QueryRow(`SELECT user_id, sudo, one_time FROM accesstokens WHERE token LIKE $1 AND (expires IS NULL OR expires > `+db.now()+`)`, t).Scan(&userID, &sudo, &oneTime)
 	switch {
 	case err == sql.ErrNoRows:
 		return -1, false
@@ -535,7 +535,7 @@ func (db *datastore) DeleteToken(accessToken []byte) error {
 // userID.
 func (db *datastore) FetchLastAccessToken(userID int64) string {
 	var t []byte
-	err := db.QueryRow("SELECT token FROM accesstokens WHERE user_id = ? AND (expires IS NULL OR expires > "+db.now()+") ORDER BY created DESC LIMIT 1", userID).Scan(&t)
+	err := db.QueryRow(`SELECT token FROM accesstokens WHERE user_id = $1 AND (expires IS NULL OR expires > `+db.now()+`) ORDER BY created DESC LIMIT 1`, userID).Scan(&t)
 	switch {
 	case err == sql.ErrNoRows:
 		return ""
@@ -606,7 +606,7 @@ func (db *datastore) CreatePasswordResetToken(userID int64) (string, error) {
 
 func (db *datastore) GetUserFromPasswordReset(token string) int64 {
 	var userID int64
-	err := db.QueryRow("SELECT user_id FROM password_resets WHERE token = ? AND used = 0 AND created > "+db.dateSub(3, "HOUR"), token).Scan(&userID)
+	err := db.QueryRow(`SELECT user_id FROM password_resets WHERE token = $1 AND used = 0 AND created > `+db.dateSub(3, "HOUR"), token).Scan(&userID)
 	if err != nil {
 		return 0
 	}
@@ -825,7 +825,7 @@ func (db *datastore) UpdateOwnedPost(post *AuthenticatedPost, userID int64) erro
 	if rowsAffected == 0 {
 		// Show the correct error message if nothing was updated
 		var dummy int
-		err := db.QueryRow("SELECT 1 FROM posts WHERE id = ? AND "+authCondition, post.ID, params[len(params)-1]).Scan(&dummy)
+		err := db.QueryRow(`SELECT 1 FROM posts WHERE id = $1 AND `+authCondition, post.ID, params[len(params)-1]).Scan(&dummy)
 		switch {
 		case err == sql.ErrNoRows:
 			return ErrUnauthorizedEditPost
@@ -869,13 +869,13 @@ func (db *datastore) GetCollectionBy(condition string, value interface{}) (*Coll
 }
 
 func (db *datastore) GetCollection(alias string) (*Collection, error) {
-	return db.GetCollectionBy("alias = ?", alias)
+	return db.GetCollectionBy(`alias = $1`, alias)
 }
 
 func (db *datastore) GetCollectionForPad(alias string) (*Collection, error) {
 	c := &Collection{Alias: alias}
 
-	row := db.QueryRow("SELECT id, alias, title, description, privacy FROM collections WHERE alias = ?", alias)
+	row := db.QueryRow(`SELECT id, alias, title, description, privacy FROM collections WHERE alias = $1`, alias)
 
 	err := row.Scan(&c.ID, &c.Alias, &c.Title, &c.Description, &c.Visibility)
 	switch {
@@ -941,7 +941,7 @@ func (db *datastore) UpdateCollection(app *App, c *SubmittedCollection, alias st
 	var rowsAffected int64
 	var changed bool
 	var res sql.Result
-	err := db.QueryRow("SELECT id FROM collections WHERE alias = ?", alias).Scan(&collID)
+	err := db.QueryRow(`SELECT id FROM collections WHERE alias = $1`, alias).Scan(&collID)
 	if err != nil {
 		log.Error("Failed selecting from collections: %v. Some things won't work.", err)
 	}
@@ -1073,7 +1073,7 @@ func (db *datastore) UpdateCollection(app *App, c *SubmittedCollection, alias st
 	if !changed || rowsAffected == 0 {
 		// Show the correct error message if nothing was updated
 		var dummy int
-		err := db.QueryRow("SELECT 1 FROM collections WHERE alias = ? AND owner_id = ?", alias, c.OwnerID).Scan(&dummy)
+		err := db.QueryRow(`SELECT 1 FROM collections WHERE alias = $1 AND owner_id = $2`, alias, c.OwnerID).Scan(&dummy)
 		switch {
 		case err == sql.ErrNoRows:
 			return ErrUnauthorizedEditPost
@@ -1092,9 +1092,9 @@ func (db *datastore) UpdateCollection(app *App, c *SubmittedCollection, alias st
 			return impart.HTTPError{http.StatusInternalServerError, "Could not create password hash."}
 		}
 		if db.driverName == driverSQLite {
-			_, err = db.Exec("INSERT OR REPLACE INTO collectionpasswords (collection_id, password) VALUES ((SELECT id FROM collections WHERE alias = ?), ?)", alias, hashedPass)
+			_, err = db.Exec(`INSERT OR REPLACE INTO collectionpasswords (collection_id, password) VALUES ((SELECT id FROM collections WHERE alias = $1), $2)`, alias, hashedPass)
 		} else {
-			_, err = db.Exec("INSERT INTO collectionpasswords (collection_id, password) VALUES ((SELECT id FROM collections WHERE alias = ?), ?) "+db.upsert("collection_id")+" password = ?", alias, hashedPass, hashedPass)
+			_, err = db.Exec(`INSERT INTO collectionpasswords (collection_id, password) VALUES ((SELECT id FROM collections WHERE alias = $1), $2) `+db.upsert("collection_id")+` password = $3`, alias, hashedPass, hashedPass)
 		}
 		if err != nil {
 			return err
@@ -1114,7 +1114,7 @@ func (db *datastore) GetEditablePost(id, editToken string) (*PublicPost, error) 
 	var ownerName sql.NullString
 	p := &Post{}
 
-	row := db.QueryRow("SELECT "+postCols+", (SELECT username FROM users WHERE users.id = posts.owner_id) AS username FROM posts WHERE id = ? LIMIT 1", id)
+	row := db.QueryRow(`SELECT `+postCols+`, (SELECT username FROM users WHERE users.id = posts.owner_id) AS username FROM posts WHERE id = $1 LIMIT 1`, id)
 	err := row.Scan(&p.ID, &p.Slug, &p.Font, &p.Language, &p.RTL, &p.Privacy, &p.OwnerID, &p.CollectionID, &p.PinnedPosition, &p.Created, &p.Updated, &p.ViewCount, &p.Title, &p.Content, &ownerName)
 	switch {
 	case err == sql.ErrNoRows:
@@ -1138,7 +1138,7 @@ func (db *datastore) GetEditablePost(id, editToken string) (*PublicPost, error) 
 
 func (db *datastore) PostIDExists(id string) bool {
 	var dummy bool
-	err := db.QueryRow("SELECT 1 FROM posts WHERE id = ?", id).Scan(&dummy)
+	err := db.QueryRow(`SELECT 1 FROM posts WHERE id = $1`, id).Scan(&dummy)
 	return err == nil && dummy
 }
 
@@ -1156,10 +1156,10 @@ func (db *datastore) GetPost(id string, collectionID int64) (*PublicPost, error)
 	var where string
 	params := []interface{}{id}
 	if collectionID > 0 {
-		where = "slug = ? AND collection_id = ?"
+		where = `slug = $1 AND collection_id = $2`
 		params = append(params, collectionID)
 	} else {
-		where = "id = ?"
+		where = `id = $1`
 	}
 	row = db.QueryRow("SELECT "+postCols+", (SELECT username FROM users WHERE users.id = posts.owner_id) AS username FROM posts WHERE "+where+" LIMIT 1", params...)
 	err := row.Scan(&p.ID, &p.Slug, &p.Font, &p.Language, &p.RTL, &p.Privacy, &p.OwnerID, &p.CollectionID, &p.PinnedPosition, &p.Created, &p.Updated, &p.ViewCount, &p.Title, &p.Content, &ownerName)
@@ -1224,9 +1224,9 @@ func (db *datastore) GetPostProperty(id string, collectionID int64, property str
 	var res interface{}
 	var row *sql.Row
 	if collectionID != 0 {
-		row = db.QueryRow("SELECT "+selectQuery+" FROM posts WHERE slug = ? AND collection_id = ? LIMIT 1", id, collectionID)
+		row = db.QueryRow(`SELECT `+selectQuery+` FROM posts WHERE slug = $1 AND collection_id = $2 LIMIT 1`, id, collectionID)
 	} else {
-		row = db.QueryRow("SELECT "+selectQuery+" FROM posts WHERE id = ? LIMIT 1", id)
+		row = db.QueryRow(`SELECT `+selectQuery+` FROM posts WHERE id = $1 LIMIT 1`, id)
 	}
 	err := row.Scan(&res)
 	switch {
@@ -1249,7 +1249,7 @@ func (db *datastore) GetPostsCount(c *CollectionObj, includeFuture bool) {
 	if !includeFuture {
 		timeCondition = "AND created <= " + db.now()
 	}
-	err := db.QueryRow("SELECT COUNT(*) FROM posts WHERE collection_id = ? AND pinned_position IS NULL "+timeCondition, c.ID).Scan(&count)
+	err := db.QueryRow(`SELECT COUNT(*) FROM posts WHERE collection_id = $1 AND pinned_position IS NULL `+timeCondition, c.ID).Scan(&count)
 	switch {
 	case err == sql.ErrNoRows:
 		c.TotalPosts = 0
@@ -1283,7 +1283,7 @@ func (db *datastore) GetPosts(cfg *config.Config, c *Collection, page int, inclu
 
 	limitStr := ""
 	if page > 0 {
-		limitStr = fmt.Sprintf(" LIMIT %d, %d", start, pagePosts)
+		limitStr = fmt.Sprintf(" OFFSET %d LIMIT %d", start, pagePosts)
 	}
 	timeCondition := ""
 	if !includeFuture {
@@ -1293,8 +1293,9 @@ func (db *datastore) GetPosts(cfg *config.Config, c *Collection, page int, inclu
 	if !includePinned {
 		pinnedCondition = "AND pinned_position IS NULL"
 	}
-	rows, err := db.Query("SELECT "+postCols+" FROM posts WHERE collection_id = ? "+pinnedCondition+" "+timeCondition+" ORDER BY created "+order+limitStr, collID)
+	rows, err := db.Query(`SELECT `+postCols+` FROM posts WHERE collection_id = $1 `+pinnedCondition+` `+timeCondition+` ORDER BY created `+order+limitStr, collID)
 	if err != nil {
+    log.Error(`SELECT `+postCols+` FROM posts WHERE collection_id = #1 `+pinnedCondition+` `+timeCondition+` ORDER BY created `+order+limitStr)
 		log.Error("Failed selecting from posts: %v", err)
 		return nil, impart.HTTPError{http.StatusInternalServerError, "Couldn't retrieve collection posts."}
 	}
@@ -1339,9 +1340,9 @@ func (db *datastore) GetAllPostsTaggedIDs(c *Collection, tag string, includeFutu
 	var rows *sql.Rows
 	var err error
 	if db.driverName == driverSQLite {
-		rows, err = db.Query("SELECT id FROM posts WHERE collection_id = ? AND LOWER(content) regexp ? "+timeCondition+" ORDER BY created "+order, collID, `.*#`+strings.ToLower(tag)+`\b.*`)
+		rows, err = db.Query(`SELECT id FROM posts WHERE collection_id = $1 AND LOWER(content) regexp $2 `+timeCondition+` ORDER BY created `+order, collID, `.*#`+strings.ToLower(tag)+`\b.*`)
 	} else {
-		rows, err = db.Query("SELECT id FROM posts WHERE collection_id = ? AND LOWER(content) RLIKE ? "+timeCondition+" ORDER BY created "+order, collID, "#"+strings.ToLower(tag)+"[[:>:]]")
+		rows, err = db.Query(`SELECT id FROM posts WHERE collection_id = $1 AND LOWER(content) RLIKE $2 `+timeCondition+" ORDER BY created "+order, collID, "#"+strings.ToLower(tag)+"[[:>:]]")
 	}
 	if err != nil {
 		log.Error("Failed selecting tagged posts: %v", err)
@@ -1390,7 +1391,7 @@ func (db *datastore) GetPostsTagged(cfg *config.Config, c *Collection, tag strin
 
 	limitStr := ""
 	if page > 0 {
-		limitStr = fmt.Sprintf(" LIMIT %d, %d", start, pagePosts)
+		limitStr = fmt.Sprintf(" OFFSET %d LIMIT %d", start, pagePosts)
 	}
 	timeCondition := ""
 	if !includeFuture {
@@ -1400,9 +1401,9 @@ func (db *datastore) GetPostsTagged(cfg *config.Config, c *Collection, tag strin
 	var rows *sql.Rows
 	var err error
 	if db.driverName == driverSQLite {
-		rows, err = db.Query("SELECT "+postCols+" FROM posts WHERE collection_id = ? AND LOWER(content) regexp ? "+timeCondition+" ORDER BY created "+order+limitStr, collID, `.*#`+strings.ToLower(tag)+`\b.*`)
+		rows, err = db.Query(`SELECT `+postCols+` FROM posts WHERE collection_id = $1 AND LOWER(content) regexp $2 `+timeCondition+" ORDER BY created "+order+limitStr, collID, `.*#`+strings.ToLower(tag)+`\b.*`)
 	} else {
-		rows, err = db.Query("SELECT "+postCols+" FROM posts WHERE collection_id = ? AND LOWER(content) RLIKE ? "+timeCondition+" ORDER BY created "+order+limitStr, collID, "#"+strings.ToLower(tag)+"[[:>:]]")
+		rows, err = db.Query("SELECT "+postCols+` FROM posts WHERE collection_id = $1 AND LOWER(content) RLIKE $2 `+timeCondition+" ORDER BY created "+order+limitStr, collID, "#"+strings.ToLower(tag)+"[[:>:]]")
 	}
 	if err != nil {
 		log.Error("Failed selecting from posts: %v", err)
@@ -1435,7 +1436,7 @@ func (db *datastore) GetPostsTagged(cfg *config.Config, c *Collection, tag strin
 
 func (db *datastore) GetCollLangTotalPosts(collID int64, lang string) (uint64, error) {
 	var articles uint64
-	err := db.QueryRow("SELECT COUNT(*) FROM posts WHERE collection_id = ? AND language = ? AND created <= "+db.now(), collID, lang).Scan(&articles)
+	err := db.QueryRow(`SELECT COUNT(*) FROM posts WHERE collection_id = $1 AND language = $2 AND created <= `+db.now(), collID, lang).Scan(&articles)
 	if err != nil && err != sql.ErrNoRows {
 		log.Error("Couldn't get total lang posts count for collection %d: %v", collID, err)
 		return 0, err
@@ -1461,7 +1462,7 @@ func (db *datastore) GetLangPosts(cfg *config.Config, c *Collection, lang string
 
 	limitStr := ""
 	if page > 0 {
-		limitStr = fmt.Sprintf(" LIMIT %d, %d", start, pagePosts)
+		limitStr = fmt.Sprintf(" OFFSET %d LIMIT %d", start, pagePosts)
 	}
 	timeCondition := ""
 	if !includeFuture {
@@ -1502,7 +1503,7 @@ ORDER BY created `+order+limitStr, collID, lang)
 }
 
 func (db *datastore) GetAPFollowers(c *Collection) (*[]RemoteUser, error) {
-	rows, err := db.Query("SELECT actor_id, inbox, shared_inbox, f.created FROM remotefollows f INNER JOIN remoteusers u ON f.remote_user_id = u.id WHERE collection_id = ?", c.ID)
+	rows, err := db.Query(`SELECT actor_id, inbox, shared_inbox, f.created FROM remotefollows f INNER JOIN remoteusers u ON f.remote_user_id = u.id WHERE collection_id = $1`, c.ID)
 	if err != nil {
 		log.Error("Failed selecting from followers: %v", err)
 		return nil, impart.HTTPError{http.StatusInternalServerError, "Couldn't retrieve followers."}
@@ -1526,7 +1527,7 @@ func (db *datastore) GetAPFollowers(c *Collection) (*[]RemoteUser, error) {
 func (db *datastore) CanCollect(cpr *ClaimPostRequest, userID int64) bool {
 	var title, content string
 	var lang sql.NullString
-	err := db.QueryRow("SELECT title, content, language FROM posts WHERE id = ? AND owner_id = ?", cpr.ID, userID).Scan(&title, &content, &lang)
+	err := db.QueryRow(`SELECT title, content, language FROM posts WHERE id = $1 AND owner_id = $2`, cpr.ID, userID).Scan(&title, &content, &lang)
 	switch {
 	case err == sql.ErrNoRows:
 		return false
@@ -1829,7 +1830,7 @@ func (db *datastore) UpdatePostPinState(pinned bool, postID string, collID, owne
 
 func (db *datastore) GetLastPinnedPostPos(collID int64) int64 {
 	var lastPos sql.NullInt64
-	err := db.QueryRow("SELECT MAX(pinned_position) FROM posts WHERE collection_id = ? AND pinned_position IS NOT NULL", collID).Scan(&lastPos)
+	err := db.QueryRow(`SELECT MAX(pinned_position) FROM posts WHERE collection_id = $1 AND pinned_position IS NOT NULL`, collID).Scan(&lastPos)
 	switch {
 	case err == sql.ErrNoRows:
 		return -1
@@ -1849,7 +1850,7 @@ func (db *datastore) GetPinnedPosts(coll *CollectionObj, includeFuture bool) (*[
 	if !includeFuture {
 		timeCondition = "AND created <= " + db.now()
 	}
-	rows, err := db.Query("SELECT id, slug, title, "+db.clip("content", 80)+", pinned_position FROM posts WHERE collection_id = ? AND pinned_position IS NOT NULL "+timeCondition+" ORDER BY pinned_position ASC", coll.ID)
+	rows, err := db.Query(`SELECT id, slug, title, `+db.clip("content", 80)+`, pinned_position FROM posts WHERE collection_id = $1 AND pinned_position IS NOT NULL `+timeCondition+` ORDER BY pinned_position ASC`, coll.ID)
 	if err != nil {
 		log.Error("Failed selecting pinned posts: %v", err)
 		return nil, impart.HTTPError{http.StatusInternalServerError, "Couldn't retrieve pinned posts."}
@@ -1875,7 +1876,7 @@ func (db *datastore) GetPinnedPosts(coll *CollectionObj, includeFuture bool) (*[
 }
 
 func (db *datastore) GetCollections(u *User, hostName string) (*[]Collection, error) {
-	rows, err := db.Query("SELECT id, alias, title, description, privacy, view_count FROM collections WHERE owner_id = ? ORDER BY id ASC", u.ID)
+	rows, err := db.Query(`SELECT id, alias, title, description, privacy, view_count FROM collections WHERE owner_id = $1 ORDER BY id ASC`, u.ID)
 	if err != nil {
 		log.Error("Failed selecting from collections: %v", err)
 		return nil, impart.HTTPError{http.StatusInternalServerError, "Couldn't retrieve user collections."}
@@ -1969,13 +1970,13 @@ func (db *datastore) GetMeStats(u *User) userMeStats {
 	s.TotalCollections = colls
 
 	var articles, collPosts uint64
-	err := db.QueryRow("SELECT COUNT(*) FROM posts WHERE owner_id = ? AND collection_id IS NULL", u.ID).Scan(&articles)
+	err := db.QueryRow(`SELECT COUNT(*) FROM posts WHERE owner_id = $1 AND collection_id IS NULL`, u.ID).Scan(&articles)
 	if err != nil && err != sql.ErrNoRows {
 		log.Error("Couldn't get articles count for user %d: %v", u.ID, err)
 	}
 	s.TotalArticles = articles
 
-	err = db.QueryRow("SELECT COUNT(*) FROM posts WHERE owner_id = ? AND collection_id IS NOT NULL", u.ID).Scan(&collPosts)
+	err = db.QueryRow(`SELECT COUNT(*) FROM posts WHERE owner_id = $1 AND collection_id IS NOT NULL`, u.ID).Scan(&collPosts)
 	if err != nil && err != sql.ErrNoRows {
 		log.Error("Couldn't get coll posts count for user %d: %v", u.ID, err)
 	}
@@ -2015,7 +2016,7 @@ func (db *datastore) GetTopPosts(u *User, alias string, hostName string) (*[]Pub
 		where = " AND alias = ?"
 		params = append(params, alias)
 	}
-	rows, err := db.Query("SELECT p.id, p.slug, p.view_count, p.title, p.content, c.alias, c.title, c.description, c.view_count FROM posts p LEFT JOIN collections c ON p.collection_id = c.id WHERE p.owner_id = ?"+where+" ORDER BY p.view_count DESC, created DESC LIMIT 25", params...)
+	rows, err := db.Query(`SELECT p.id, p.slug, p.view_count, p.title, p.content, c.alias, c.title, c.description, c.view_count FROM posts p LEFT JOIN collections c ON p.collection_id = c.id WHERE p.owner_id = $1`+where+` ORDER BY p.view_count DESC, created DESC LIMIT 25`, params...)
 	if err != nil {
 		log.Error("Failed selecting from posts: %v", err)
 		return nil, impart.HTTPError{http.StatusInternalServerError, "Couldn't retrieve user top posts."}
@@ -2072,9 +2073,9 @@ func (db *datastore) GetAnonymousPosts(u *User, page int) (*[]PublicPost, error)
 
 	limitStr := ""
 	if page > 0 {
-		limitStr = fmt.Sprintf(" LIMIT %d, %d", start, pagePosts)
+		limitStr = fmt.Sprintf(" OFFSET %d LIMIT %d", start, pagePosts)
 	}
-	rows, err := db.Query("SELECT id, view_count, title, language, created, updated, content FROM posts WHERE owner_id = ? AND collection_id IS NULL ORDER BY created DESC"+limitStr, u.ID)
+	rows, err := db.Query(`SELECT id, view_count, title, language, created, updated, content FROM posts WHERE owner_id = $1 AND collection_id IS NULL ORDER BY created DESC`+limitStr, u.ID)
 	if err != nil {
 		log.Error("Failed selecting from posts: %v", err)
 		return nil, impart.HTTPError{http.StatusInternalServerError, "Couldn't retrieve user anonymous posts."}
@@ -2102,7 +2103,7 @@ func (db *datastore) GetAnonymousPosts(u *User, page int) (*[]PublicPost, error)
 }
 
 func (db *datastore) GetUserPosts(u *User) (*[]PublicPost, error) {
-	rows, err := db.Query("SELECT p.id, p.slug, p.view_count, p.title, p.created, p.updated, p.content, p.text_appearance, p.language, p.rtl, c.alias, c.title, c.description, c.view_count FROM posts p LEFT JOIN collections c ON collection_id = c.id WHERE p.owner_id = ? ORDER BY created ASC", u.ID)
+	rows, err := db.Query(`SELECT p.id, p.slug, p.view_count, p.title, p.created, p.updated, p.content, p.text_appearance, p.language, p.rtl, c.alias, c.title, c.description, c.view_count FROM posts p LEFT JOIN collections c ON collection_id = c.id WHERE p.owner_id = $1 ORDER BY created ASC`, u.ID)
 	if err != nil {
 		log.Error("Failed selecting from posts: %v", err)
 		return nil, impart.HTTPError{http.StatusInternalServerError, "Couldn't retrieve user posts."}
@@ -2150,7 +2151,7 @@ func (db *datastore) GetUserPosts(u *User) (*[]PublicPost, error) {
 
 func (db *datastore) GetUserPostsCount(userID int64) int64 {
 	var count int64
-	err := db.QueryRow("SELECT COUNT(*) FROM posts WHERE owner_id = ?", userID).Scan(&count)
+	err := db.QueryRow(`SELECT COUNT(*) FROM posts WHERE owner_id = $1`, userID).Scan(&count)
 	switch {
 	case err == sql.ErrNoRows:
 		return 0
@@ -2303,7 +2304,7 @@ func (db *datastore) ChangeSettings(app *App, u *User, s *userSettings) error {
 	if rowsAffected == 0 {
 		// Show the correct error message if nothing was updated
 		var dummy int
-		err := db.QueryRow("SELECT 1 FROM users WHERE id = ?", u.ID).Scan(&dummy)
+		err := db.QueryRow(`SELECT 1 FROM users WHERE id = $1`, u.ID).Scan(&dummy)
 		switch {
 		case err == sql.ErrNoRows:
 			return ErrUnauthorizedGeneral
@@ -2322,7 +2323,7 @@ func (db *datastore) ChangeSettings(app *App, u *User, s *userSettings) error {
 
 func (db *datastore) ChangePassphrase(userID int64, sudo bool, curPass string, hashedPass []byte) error {
 	var dbPass []byte
-	err := db.QueryRow("SELECT password FROM users WHERE id = ?", userID).Scan(&dbPass)
+	err := db.QueryRow(`SELECT password FROM users WHERE id = $1`, userID).Scan(&dbPass)
 	switch {
 	case err == sql.ErrNoRows:
 		return ErrUserNotFound
@@ -2366,7 +2367,7 @@ func (db *datastore) DeleteCollection(alias string, userID int64) error {
 	c := &Collection{Alias: alias}
 	var username string
 
-	row := db.QueryRow("SELECT username FROM users WHERE id = ?", userID)
+	row := db.QueryRow(`SELECT username FROM users WHERE id = $1`, userID)
 	err := row.Scan(&username)
 	if err != nil {
 		return err
@@ -2377,7 +2378,7 @@ func (db *datastore) DeleteCollection(alias string, userID int64) error {
 		return impart.HTTPError{http.StatusForbidden, "You cannot currently delete your primary blog."}
 	}
 
-	row = db.QueryRow("SELECT id FROM collections WHERE alias = ? AND owner_id = ?", alias, userID)
+	row = db.QueryRow(`SELECT id FROM collections WHERE alias = $1 AND owner_id = $2`, alias, userID)
 	err = row.Scan(&c.ID)
 	switch {
 	case err == sql.ErrNoRows:
@@ -2431,7 +2432,7 @@ func (db *datastore) DeleteCollection(alias string, userID int64) error {
 
 func (db *datastore) IsCollectionAttributeOn(id int64, attr string) bool {
 	var v string
-	err := db.QueryRow("SELECT value FROM collectionattributes WHERE collection_id = ? AND attribute = ?", id, attr).Scan(&v)
+	err := db.QueryRow(`SELECT value FROM collectionattributes WHERE collection_id = $1 AND attribute = $2`, id, attr).Scan(&v)
 	switch {
 	case err == sql.ErrNoRows:
 		return false
@@ -2444,7 +2445,7 @@ func (db *datastore) IsCollectionAttributeOn(id int64, attr string) bool {
 
 func (db *datastore) CollectionHasAttribute(id int64, attr string) bool {
 	var dummy string
-	err := db.QueryRow("SELECT value FROM collectionattributes WHERE collection_id = ? AND attribute = ?", id, attr).Scan(&dummy)
+	err := db.QueryRow(`SELECT value FROM collectionattributes WHERE collection_id = $1 AND attribute = $2`, id, attr).Scan(&dummy)
 	switch {
 	case err == sql.ErrNoRows:
 		return false
@@ -2485,7 +2486,7 @@ func (db *datastore) SetCollectionAttribute(id int64, attr, v string) error {
 // DeleteAccount will delete the entire account for userID
 func (db *datastore) DeleteAccount(userID int64) error {
 	// Get all collections
-	rows, err := db.Query("SELECT id, alias FROM collections WHERE owner_id = ?", userID)
+	rows, err := db.Query(`SELECT id, alias FROM collections WHERE owner_id = $1`, userID)
 	if err != nil {
 		log.Error("Unable to get collections: %v", err)
 		return err
@@ -2652,7 +2653,7 @@ func (db *datastore) DeleteAccount(userID int64) error {
 
 func (db *datastore) GetAPActorKeys(collectionID int64) ([]byte, []byte) {
 	var pub, priv []byte
-	err := db.QueryRow("SELECT public_key, private_key FROM collectionkeys WHERE collection_id = ?", collectionID).Scan(&pub, &priv)
+	err := db.QueryRow(`SELECT public_key, private_key FROM collectionkeys WHERE collection_id = $1`, collectionID).Scan(&pub, &priv)
 	switch {
 	case err == sql.ErrNoRows:
 		// Generate keys
@@ -2676,7 +2677,7 @@ func (db *datastore) CreateUserInvite(id string, userID int64, maxUses int, expi
 }
 
 func (db *datastore) GetUserInvites(userID int64) (*[]Invite, error) {
-	rows, err := db.Query("SELECT id, max_uses, created, expires, inactive FROM userinvites WHERE owner_id = ? ORDER BY created DESC", userID)
+	rows, err := db.Query(`SELECT id, max_uses, created, expires, inactive FROM userinvites WHERE owner_id = $1 ORDER BY created DESC`, userID)
 	if err != nil {
 		log.Error("Failed selecting from userinvites: %v", err)
 		return nil, impart.HTTPError{http.StatusInternalServerError, "Couldn't retrieve user invites."}
@@ -2694,7 +2695,7 @@ func (db *datastore) GetUserInvites(userID int64) (*[]Invite, error) {
 
 func (db *datastore) GetUserInvite(id string) (*Invite, error) {
 	var i Invite
-	err := db.QueryRow("SELECT id, max_uses, created, expires, inactive FROM userinvites WHERE id = ?", id).Scan(&i.ID, &i.MaxUses, &i.Created, &i.Expires, &i.Inactive)
+	err := db.QueryRow(`SELECT id, max_uses, created, expires, inactive FROM userinvites WHERE id = $1`, id).Scan(&i.ID, &i.MaxUses, &i.Created, &i.Expires, &i.Inactive)
 	switch {
 	case err == sql.ErrNoRows, db.isIgnorableError(err):
 		return nil, impart.HTTPError{http.StatusNotFound, "Invite doesn't exist."}
@@ -2711,7 +2712,7 @@ func (db *datastore) GetUserInvite(id string) (*Invite, error) {
 // of an error.
 func (db *datastore) IsUsersInvite(code string, userID int64) (bool, error) {
 	var id string
-	err := db.QueryRow("SELECT id FROM userinvites WHERE id = ? AND owner_id = ?", code, userID).Scan(&id)
+	err := db.QueryRow(`SELECT id FROM userinvites WHERE id = $1 AND owner_id = $2`, code, userID).Scan(&id)
 	if err != nil && err != sql.ErrNoRows {
 		log.Error("Failed selecting invite: %v", err)
 		return false, err
@@ -2721,7 +2722,7 @@ func (db *datastore) IsUsersInvite(code string, userID int64) (bool, error) {
 
 func (db *datastore) GetUsersInvitedCount(id string) int64 {
 	var count int64
-	err := db.QueryRow("SELECT COUNT(*) FROM usersinvited WHERE invite_id = ?", id).Scan(&count)
+	err := db.QueryRow(`SELECT COUNT(*) FROM usersinvited WHERE invite_id = $1`, id).Scan(&count)
 	switch {
 	case err == sql.ErrNoRows:
 		return 0
@@ -2778,7 +2779,7 @@ func (db *datastore) GetDynamicContent(id string) (*instanceContent, error) {
 	c := &instanceContent{
 		ID: id,
 	}
-	err := db.QueryRow("SELECT title, content, updated, content_type FROM appcontent WHERE id = ?", id).Scan(&c.Title, &c.Content, &c.Updated, &c.Type)
+	err := db.QueryRow(`SELECT title, content, updated, content_type FROM appcontent WHERE id = $1`, id).Scan(&c.Title, &c.Content, &c.Updated, &c.Type)
 	switch {
 	case err == sql.ErrNoRows:
 		return nil, nil
@@ -2844,7 +2845,7 @@ func (db *datastore) GetAllUsersCount() int64 {
 
 func (db *datastore) GetUserLastPostTime(id int64) (*time.Time, error) {
 	var t time.Time
-	err := db.QueryRow("SELECT created FROM posts WHERE owner_id = ? ORDER BY created DESC LIMIT 1", id).Scan(&t)
+	err := db.QueryRow(`SELECT created FROM posts WHERE owner_id = $1 ORDER BY created DESC LIMIT 1`, id).Scan(&t)
 	switch {
 	case err == sql.ErrNoRows:
 		return nil, nil
@@ -2866,7 +2867,7 @@ func (db *datastore) SetUserStatus(id int64, status UserStatus) error {
 
 func (db *datastore) GetCollectionLastPostTime(id int64) (*time.Time, error) {
 	var t time.Time
-	err := db.QueryRow("SELECT created FROM posts WHERE collection_id = ? ORDER BY created DESC LIMIT 1", id).Scan(&t)
+	err := db.QueryRow(`SELECT created FROM posts WHERE collection_id = $1 ORDER BY created DESC LIMIT 1`, id).Scan(&t)
 	switch {
 	case err == sql.ErrNoRows:
 		return nil, nil
@@ -2895,7 +2896,7 @@ func (db *datastore) ValidateOAuthState(ctx context.Context, state string) (stri
 	var inviteCode sql.NullString
 	err := wf_db.RunTransactionWithOptions(ctx, db.DB, &sql.TxOptions{}, func(ctx context.Context, tx *sql.Tx) error {
 		err := tx.
-			QueryRowContext(ctx, "SELECT provider, client_id, attach_user_id, invite_code FROM oauth_client_states WHERE state = ? AND used = FALSE", state).
+			QueryRowContext(ctx, `SELECT provider, client_id, attach_user_id, invite_code FROM oauth_client_states WHERE state = $1 AND used = FALSE`, state).
 			Scan(&provider, &clientID, &attachUserID, &inviteCode)
 		if err != nil {
 			return err
@@ -2937,7 +2938,7 @@ func (db *datastore) RecordRemoteUserID(ctx context.Context, localUserID int64, 
 func (db *datastore) GetIDForRemoteUser(ctx context.Context, remoteUserID, provider, clientID string) (int64, error) {
 	var userID int64 = -1
 	err := db.
-		QueryRowContext(ctx, "SELECT user_id FROM oauth_users WHERE remote_user_id = ? AND provider = ? AND client_id = ?", remoteUserID, provider, clientID).
+		QueryRowContext(ctx, `SELECT user_id FROM oauth_users WHERE remote_user_id = $1 AND provider = $2 AND client_id = $3`, remoteUserID, provider, clientID).
 		Scan(&userID)
 	// Not finding a record is OK.
 	if err != nil && err != sql.ErrNoRows {
@@ -2955,7 +2956,7 @@ type oauthAccountInfo struct {
 }
 
 func (db *datastore) GetOauthAccounts(ctx context.Context, userID int64) ([]oauthAccountInfo, error) {
-	rows, err := db.QueryContext(ctx, "SELECT provider, client_id, remote_user_id FROM oauth_users WHERE user_id = ? ", userID)
+	rows, err := db.QueryContext(ctx, `SELECT provider, client_id, remote_user_id FROM oauth_users WHERE user_id = $1 `, userID)
 	if err != nil {
 		log.Error("Failed selecting from oauth_users: %v", err)
 		return nil, impart.HTTPError{http.StatusInternalServerError, "Couldn't retrieve user oauth accounts."}
@@ -3101,9 +3102,9 @@ func (db *datastore) IsEmailSubscriber(email string, userID, collID int64) bool 
 	var dummy int
 	var err error
 	if email != "" {
-		err = db.QueryRow("SELECT 1 FROM emailsubscribers WHERE email = ? AND collection_id = ?", email, collID).Scan(&dummy)
+		err = db.QueryRow(`SELECT 1 FROM emailsubscribers WHERE email = $1 AND collection_id = $2`, email, collID).Scan(&dummy)
 	} else {
-		err = db.QueryRow("SELECT 1 FROM emailsubscribers WHERE user_id = ? AND collection_id = ?", userID, collID).Scan(&dummy)
+		err = db.QueryRow(`SELECT 1 FROM emailsubscribers WHERE user_id = $1 AND collection_id = $2`, userID, collID).Scan(&dummy)
 	}
 	switch {
 	case err == sql.ErrNoRows:
@@ -3123,7 +3124,7 @@ func (db *datastore) GetEmailSubscribers(collID int64, reqConfirmed bool) ([]*Em
 FROM emailsubscribers s 
 LEFT JOIN users u 
   ON u.id = user_id 
-WHERE collection_id = ?`+cond+`
+WHERE collection_id = $1`+cond+`
 ORDER BY subscribed DESC`, collID)
 	if err != nil {
 		log.Error("Failed selecting email subscribers for collection %d: %v", collID, err)
@@ -3147,7 +3148,7 @@ ORDER BY subscribed DESC`, collID)
 func (db *datastore) FetchEmailSubscriberEmail(subID, token string) (string, error) {
 	var email sql.NullString
 	// TODO: return user email if there's a user_id ?
-	err := db.QueryRow("SELECT email FROM emailsubscribers WHERE id = ? AND token = ?", subID, token).Scan(&email)
+	err := db.QueryRow(`SELECT email FROM emailsubscribers WHERE id = $1 AND token = $2`, subID, token).Scan(&email)
 	switch {
 	case err == sql.ErrNoRows:
 		return "", fmt.Errorf("Subscriber doesn't exist or token is invalid.")
@@ -3165,9 +3166,9 @@ func (db *datastore) FetchEmailSubscriber(email string, userID, collID int64) (*
 	s := &EmailSubscriber{}
 	var row *sql.Row
 	if email != "" {
-		row = db.QueryRow("SELECT "+emailSubCols+" FROM emailsubscribers WHERE email = ? AND collection_id = ?", email, collID)
+		row = db.QueryRow(`SELECT `+emailSubCols+` FROM emailsubscribers WHERE email = $1 AND collection_id = $2`, email, collID)
 	} else {
-		row = db.QueryRow("SELECT "+emailSubCols+" FROM emailsubscribers WHERE user_id = ? AND collection_id = ?", userID, collID)
+		row = db.QueryRow(`SELECT `+emailSubCols+` FROM emailsubscribers WHERE user_id = $1 AND collection_id = $2`, userID, collID)
 	}
 	err := row.Scan(&s.ID, &s.CollID, &s.UserID, &s.Email, &s.Subscribed, &s.Token, &s.Confirmed, &s.AllowExport)
 	switch {
@@ -3229,7 +3230,7 @@ func (db *datastore) UpdateSubscriberConfirmed(subID, token string) error {
 
 func (db *datastore) IsSubscriberConfirmed(email string) bool {
 	var dummy int64
-	err := db.QueryRow("SELECT 1 FROM emailsubscribers WHERE email = ? AND confirmed = 1", email).Scan(&dummy)
+	err := db.QueryRow(`SELECT 1 FROM emailsubscribers WHERE email = $1 AND confirmed = 1`, email).Scan(&dummy)
 	switch {
 	case err == sql.ErrNoRows:
 		return false

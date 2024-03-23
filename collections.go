@@ -975,7 +975,7 @@ func handleViewCollection(app *App, w http.ResponseWriter, r *http.Request) erro
 			return
 		}
 
-		_, err := app.db.Exec("UPDATE collections SET view_count = view_count + 1 WHERE id = ?", coll.ID)
+		_, err := app.db.Exec(`UPDATE collections SET view_count = view_count + 1 WHERE id = $1`, coll.ID)
 		if err != nil {
 			log.Error("Unable to update collections count: %v", err)
 		}
