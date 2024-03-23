@@ -720,7 +720,7 @@ func (db *datastore) CreatePost(userID, collID int64, post *SubmittedPost) (*Pos
 		}
 	}
 
-	stmt, err := db.Prepare("INSERT INTO posts (id, slug, title, content, text_appearance, language, rtl, privacy, owner_id, collection_id, created, updated, view_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " + db.now() + ", ?)")
+	stmt, err := db.Prepare(`INSERT INTO posts (id, slug, title, content, text_appearance, language, rtl, privacy, owner_id, collection_id, created, updated, view_count) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, ` + db.now() + `, $12)`)
 	if err != nil {
 		return nil, err
 	}
@@ -760,34 +760,41 @@ func (db *datastore) CreatePost(userID, collID int64, post *SubmittedPost) (*Pos
 // supplied AuthenticatedPost.
 func (db *datastore) UpdateOwnedPost(post *AuthenticatedPost, userID int64) error {
 	params := []interface{}{}
+  var paramsIdx = 1
 	var queryUpdates, sep, authCondition string
 	if post.Slug != nil && *post.Slug != "" {
-		queryUpdates += sep + "slug = ?"
+		queryUpdates += sep + `slug = `+fmt.Sprintf("$%d", paramsIdx)
+    paramsIdx++
 		sep = ", "
 		params = append(params, getSlug(*post.Slug, ""))
 	}
 	if post.Content != nil {
-		queryUpdates += sep + "content = ?"
+		queryUpdates += sep + `content = `+fmt.Sprintf("$%d", paramsIdx)
+    paramsIdx++
 		sep = ", "
 		params = append(params, post.Content)
 	}
 	if post.Title != nil {
-		queryUpdates += sep + "title = ?"
+		queryUpdates += sep + `title = `+fmt.Sprintf("$%d", paramsIdx)
+    paramsIdx++
 		sep = ", "
 		params = append(params, post.Title)
 	}
 	if post.Language.Valid {
-		queryUpdates += sep + "language = ?"
+		queryUpdates += sep + `language = `+fmt.Sprintf("$%d", paramsIdx)
+    paramsIdx++
 		sep = ", "
 		params = append(params, post.Language.String)
 	}
 	if post.IsRTL.Valid {
-		queryUpdates += sep + "rtl = ?"
+		queryUpdates += sep + `rtl = `+fmt.Sprintf("$%d", paramsIdx)
+    paramsIdx++
 		sep = ", "
 		params = append(params, post.IsRTL.Bool)
 	}
 	if post.Font != "" {
-		queryUpdates += sep + "text_appearance = ?"
+		queryUpdates += sep + `text_appearance = `+fmt.Sprintf("$%d", paramsIdx)
+    paramsIdx++
 		sep = ", "
 		params = append(params, post.Font)
 	}
@@ -797,7 +804,8 @@ func (db *datastore) UpdateOwnedPost(post *AuthenticatedPost, userID int64) erro
 			log.Error("Unable to parse Created date: %v", err)
 			return fmt.Errorf("That's the incorrect format for Created date.")
 		}
-		queryUpdates += sep + "created = ?"
+		queryUpdates += sep + `created = `+fmt.Sprintf("$%d", paramsIdx)
+    paramsIdx++
 		sep = ", "
 		params = append(params, createTime)
 	}
@@ -806,7 +814,7 @@ func (db *datastore) UpdateOwnedPost(post *AuthenticatedPost, userID int64) erro
 	// id = ?
 	params = append(params, post.ID)
 	// AND owner_id = ?
-	authCondition = "(owner_id = ?)"
+	authCondition = `(owner_id = `+fmt.Sprintf("$%d",paramsIdx+1)+")"
 	params = append(params, userID)
 
 	if queryUpdates == "" {
@@ -815,7 +823,7 @@ func (db *datastore) UpdateOwnedPost(post *AuthenticatedPost, userID int64) erro
 
 	queryUpdates += sep + "updated = " + db.now()
 
-	res, err := db.Exec("UPDATE posts SET "+queryUpdates+" WHERE id = ? AND "+authCondition, params...)
+	res, err := db.Exec("UPDATE posts SET "+queryUpdates+` WHERE id = `+fmt.Sprintf("$%d", paramsIdx)+" AND "+authCondition, params...)
 	if err != nil {
 		log.Error("Unable to update owned post: %v", err)
 		return err
@@ -1611,7 +1619,7 @@ func (db *datastore) DispersePosts(userID int64, postIDs []string) (*[]ClaimPost
 		// Do AND owner_id = ? for sanity.
 		// This should've been caught and returned with a good error message
 		// just above.
-		query = "UPDATE posts SET collection_id = NULL WHERE id = ? AND owner_id = ?"
+		query = `UPDATE posts SET collection_id = NULL WHERE id = $1 AND owner_id = $2`
 		params = []interface{}{postID, userID}
 		qRes, err = db.Exec(query, params...)
 		if err != nil {
@@ -1744,16 +1752,16 @@ func (db *datastore) ClaimPosts(cfg *config.Config, userID int64, collAlias stri
 			if canCollect {
 				// User already owns this post, so just add it to the given
 				// collection.
-				query = "UPDATE posts SET collection_id = ?, slug = ? WHERE id = ? AND owner_id = ?"
+				query = `UPDATE posts SET collection_id = $1, slug = $2 WHERE id = $3 AND owner_id = $4`
 				params = []interface{}{coll.ID, p.Slug, p.ID, userID}
 				slugIdx = 1
 			} else {
-				query = "UPDATE posts SET owner_id = ?, collection_id = ?, slug = ? WHERE id = ? AND modify_token = ? AND owner_id IS NULL"
+				query = `UPDATE posts SET owner_id = $1, collection_id = $2, slug = $3 WHERE id = $4 AND modify_token = $5 AND owner_id IS NULL`
 				params = []interface{}{userID, coll.ID, p.Slug, p.ID, p.Token}
 				slugIdx = 2
 			}
 		} else {
-			query = "UPDATE posts SET owner_id = ? WHERE id = ? AND modify_token = ? AND owner_id IS NULL"
+			query = `UPDATE posts SET owner_id = $1 WHERE id = $2 AND modify_token = $3 AND owner_id IS NULL`
 			params = []interface{}{userID, p.ID, p.Token}
 		}
 		qRes, err = db.AttemptClaim(&p, query, params, slugIdx)
@@ -2013,7 +2021,7 @@ func (db *datastore) GetTopPosts(u *User, alias string, hostName string) (*[]Pub
 	params := []interface{}{u.ID}
 	where := ""
 	if alias != "" {
-		where = " AND alias = ?"
+		where = ` AND alias = $2`
 		params = append(params, alias)
 	}
 	rows, err := db.Query(`SELECT p.id, p.slug, p.view_count, p.title, p.content, c.alias, c.title, c.description, c.view_count FROM posts p LEFT JOIN collections c ON p.collection_id = c.id WHERE p.owner_id = $1`+where+` ORDER BY p.view_count DESC, created DESC LIMIT 25`, params...)

@@ -357,7 +357,7 @@ func handleViewPost(app *App, w http.ResponseWriter, r *http.Request) error {
 		return impart.HTTPError{http.StatusFound, fmt.Sprintf("/%s%s", fixedID, ext)}
 	}
 
-	err := app.db.QueryRow("SELECT owner_id, collection_id, title, content, text_appearance, view_count, language, rtl FROM posts WHERE id = ?", friendlyID).Scan(&ownerID, &collectionID, &title, &content, &font, &views, &language, &rtl)
+	err := app.db.QueryRow(`SELECT owner_id, collection_id, title, content, text_appearance, view_count, language, rtl FROM posts WHERE id = $1`, friendlyID).Scan(&ownerID, &collectionID, &title, &content, &font, &views, &language, &rtl)
 	switch {
 	case err == sql.ErrNoRows:
 		found = false
@@ -1332,7 +1332,7 @@ func getRawPost(app *App, friendlyID string) *RawPost {
 	var ownerID sql.NullInt64
 	var created, updated time.Time
 
-	err := app.db.QueryRow("SELECT title, content, text_appearance, language, rtl, created, updated, owner_id FROM posts WHERE id = ?", friendlyID).Scan(&title, &content, &font, &lang, &isRTL, &created, &updated, &ownerID)
+	err := app.db.QueryRow(`SELECT title, content, text_appearance, language, rtl, created, updated, owner_id FROM posts WHERE id = $1`, friendlyID).Scan(&title, &content, &font, &lang, &isRTL, &created, &updated, &ownerID)
 	switch {
 	case err == sql.ErrNoRows:
 		return &RawPost{Content: "", Found: false, Gone: false}
@@ -1367,7 +1367,7 @@ func getRawCollectionPost(app *App, slug, collAlias string) *RawPost {
 	var err error
 
 	if app.cfg.App.SingleUser {
-		err = app.db.QueryRow("SELECT id, title, content, text_appearance, language, rtl, view_count, created, updated, owner_id FROM posts WHERE slug = ? AND collection_id = 1", slug).Scan(&id, &title, &content, &font, &lang, &isRTL, &views, &created, &updated, &ownerID)
+		err = app.db.QueryRow(`SELECT id, title, content, text_appearance, language, rtl, view_count, created, updated, owner_id FROM posts WHERE slug = $1 AND collection_id = 1`, slug).Scan(&id, &title, &content, &font, &lang, &isRTL, &views, &created, &updated, &ownerID)
 	} else {
 		err = app.db.QueryRow("SELECT id, title, content, text_appearance, language, rtl, view_count, created, updated, owner_id FROM posts WHERE slug = ? AND collection_id = (SELECT id FROM collections WHERE alias = ?)", slug, collAlias).Scan(&id, &title, &content, &font, &lang, &isRTL, &views, &created, &updated, &ownerID)
 	}
@@ -1621,7 +1621,7 @@ Are you sure it was ever here?`,
 		}
 		// Update stats for non-raw post views
 		if !isRaw && r.Method != "HEAD" && !bots.IsBot(r.UserAgent()) {
-			_, err := app.db.Exec("UPDATE posts SET view_count = view_count + 1 WHERE slug = ? AND collection_id = ?", slug, coll.ID)
+			_, err := app.db.Exec(`UPDATE posts SET view_count = view_count + 1 WHERE slug = $1 AND collection_id = $2`, slug, coll.ID)
 			if err != nil {
 				log.Error("Unable to update posts count: %v", err)
 			}
