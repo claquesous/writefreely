@@ -2680,7 +2680,7 @@ func (db *datastore) GetAPActorKeys(collectionID int64) ([]byte, []byte) {
 }
 
 func (db *datastore) CreateUserInvite(id string, userID int64, maxUses int, expires *time.Time) error {
-	_, err := db.Exec("INSERT INTO userinvites (id, owner_id, max_uses, created, expires, inactive) VALUES (?, ?, ?, "+db.now()+", ?, 0)", id, userID, maxUses, expires)
+	_, err := db.Exec(`INSERT INTO userinvites (id, owner_id, max_uses, created, expires, inactive) VALUES ($1, $2, $3, `+db.now()+`, $4, 0)`, id, userID, maxUses, expires)
 	return err
 }
 
@@ -2812,12 +2812,12 @@ func (db *datastore) UpdateDynamicContent(id, title, content, contentType string
 }
 
 func (db *datastore) GetAllUsers(page uint) (*[]User, error) {
-	limitStr := fmt.Sprintf("0, %d", adminUsersPerPage)
+	limitStr := fmt.Sprintf("LIMIT %d", adminUsersPerPage)
 	if page > 1 {
-		limitStr = fmt.Sprintf("%d, %d", (page-1)*adminUsersPerPage, adminUsersPerPage)
+		limitStr = fmt.Sprintf("OFFSET %d LIMIT %d", (page-1)*adminUsersPerPage, adminUsersPerPage)
 	}
 
-	rows, err := db.Query("SELECT id, username, created, status FROM users ORDER BY created DESC LIMIT " + limitStr)
+	rows, err := db.Query("SELECT id, username, created, status FROM users ORDER BY created DESC " + limitStr)
 	if err != nil {
 		log.Error("Failed selecting from users: %v", err)
 		return nil, impart.HTTPError{http.StatusInternalServerError, "Couldn't retrieve all users."}
