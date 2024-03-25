@@ -1369,7 +1369,7 @@ func getRawCollectionPost(app *App, slug, collAlias string) *RawPost {
 	if app.cfg.App.SingleUser {
 		err = app.db.QueryRow(`SELECT id, title, content, text_appearance, language, rtl, view_count, created, updated, owner_id FROM posts WHERE slug = $1 AND collection_id = 1`, slug).Scan(&id, &title, &content, &font, &lang, &isRTL, &views, &created, &updated, &ownerID)
 	} else {
-		err = app.db.QueryRow("SELECT id, title, content, text_appearance, language, rtl, view_count, created, updated, owner_id FROM posts WHERE slug = ? AND collection_id = (SELECT id FROM collections WHERE alias = ?)", slug, collAlias).Scan(&id, &title, &content, &font, &lang, &isRTL, &views, &created, &updated, &ownerID)
+		err = app.db.QueryRow(`SELECT id, title, content, text_appearance, language, rtl, view_count, created, updated, owner_id FROM posts WHERE slug = $1 AND collection_id = (SELECT id FROM collections WHERE alias = $2)`, slug, collAlias).Scan(&id, &title, &content, &font, &lang, &isRTL, &views, &created, &updated, &ownerID)
 	}
 	switch {
 	case err == sql.ErrNoRows:

@@ -263,7 +263,7 @@ func (db *datastore) UpdateUserEmail(keys *key.Keychain, userID int64, email str
 }
 
 func (db *datastore) UpdateEncryptedUserEmail(userID int64, encEmail []byte) error {
-	_, err := db.Exec("UPDATE users SET email = ? WHERE id = ?", encEmail, userID)
+	_, err := db.Exec(`UPDATE users SET email = $1 WHERE id = $2`, encEmail, userID)
 	if err != nil {
 		return fmt.Errorf("Unable to update user email: %s", err)
 	}
@@ -1825,9 +1825,9 @@ func (db *datastore) UpdatePostPinState(pinned bool, postID string, collID, owne
 	}
 	var err error
 	if pinned {
-		_, err = db.Exec("UPDATE posts SET pinned_position = ? WHERE id = ?", pos, postID)
+		_, err = db.Exec(`UPDATE posts SET pinned_position = $1 WHERE id = $2`, pos, postID)
 	} else {
-		_, err = db.Exec("UPDATE posts SET pinned_position = NULL WHERE id = ?", postID)
+		_, err = db.Exec(`UPDATE posts SET pinned_position = NULL WHERE id = $1`, postID)
 	}
 	if err != nil {
 		log.Error("Unable to update pinned post: %v", err)
@@ -2215,7 +2215,7 @@ func (db *datastore) ChangeSettings(app *App, u *User, s *userSettings) error {
 			return err
 		}
 
-		_, err = t.Exec("UPDATE users SET username = ? WHERE id = ?", newUsername, u.ID)
+		_, err = t.Exec(`UPDATE users SET username = $1 WHERE id = $2`, newUsername, u.ID)
 		if err != nil {
 			t.Rollback()
 			if db.isDuplicateKeyErr(err) {
@@ -2225,7 +2225,7 @@ func (db *datastore) ChangeSettings(app *App, u *User, s *userSettings) error {
 			return ErrInternalGeneral
 		}
 
-		_, err = t.Exec("UPDATE collections SET alias = ? WHERE alias = ? AND owner_id = ?", newUsername, u.Username, u.ID)
+		_, err = t.Exec(`UPDATE collections SET alias = $1 WHERE alias = $2 AND owner_id = $3`, newUsername, u.Username, u.ID)
 		if err != nil {
 			t.Rollback()
 			if db.isDuplicateKeyErr(err) {
@@ -2237,11 +2237,11 @@ func (db *datastore) ChangeSettings(app *App, u *User, s *userSettings) error {
 
 		// Keep track of name changes for redirection
 		db.RemoveCollectionRedirect(t, newUsername)
-		_, err = t.Exec("UPDATE collectionredirects SET new_alias = ? WHERE new_alias = ?", newUsername, u.Username)
+		_, err = t.Exec(`UPDATE collectionredirects SET new_alias = $1 WHERE new_alias = $2`, newUsername, u.Username)
 		if err != nil {
 			log.Error("Unable to update collectionredirects: %v", err)
 		}
-		_, err = t.Exec("INSERT INTO collectionredirects (prev_alias, new_alias) VALUES (?, ?)", u.Username, newUsername)
+		_, err = t.Exec(`INSERT INTO collectionredirects (prev_alias, new_alias) VALUES ($1, $2)`, u.Username, newUsername)
 		if err != nil {
 			log.Error("Unable to add new collectionredirect: %v", err)
 		}

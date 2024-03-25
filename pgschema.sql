@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS posts (
   privacy smallint NOT NULL,
   owner_id int DEFAULT NULL,
   collection_id int DEFAULT NULL,
-  pinned_position smallint CHECK (pinned_position > 0) DEFAULT NULL,
+  pinned_position smallint DEFAULT NULL,
   created timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   view_count int NOT NULL,
